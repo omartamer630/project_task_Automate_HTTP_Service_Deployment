@@ -17,15 +17,25 @@ aws --version
 aws secretsmanager get-secret-value --secret-id Github_Credentials --query 'SecretString' --output text
 
 
-#configure git
-sudo -u ubuntu git config --global credential.helper '!aws codecommit credential-helper $@'
+# Configure Git
+
+# Retrieve GitHub token from AWS Secrets Manager
+GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id Github_Credentials --query 'SecretString' --output text)
+
+# Store the GitHub token in Git credentials using a temporary environment variable
+# Avoid echoing the full URL to prevent token exposure
+git_url="https://omartamer630:$GITHUB_TOKEN@github.com"
+echo "$git_url" | sudo -u ubuntu git credential approve
+
+# Configure Git credential helper
+sudo -u ubuntu git config --global credential.helper cache
 sudo -u ubuntu git config --global credential.UseHttpPath true
 
 
 #clone repo from code commit
 cd /home/ubuntu
 echo "git clone"
-sudo -u ubuntu git clone https://git-codecommit.eu-north-1.amazonaws.com/v1/repos/srv-02
+sudo -u ubuntu git clone https://github.com/omartamer630/project_task_Automate_HTTP_Service_Deployment.git
 cd srv-02
 
 #build the dot net service
