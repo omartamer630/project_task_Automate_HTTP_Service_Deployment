@@ -9,7 +9,7 @@
 
 #### 2- Create EC2 Template 
 1. Name it and Choose Default settings
-2. Go to advanced details and Add IAM Role & add Build.sh to user data to configure the server for dotnetapp
+2. Go to advanced details and Add IAM Role & add ```bash Build.sh file ``` to user data to configure the server for dotnetapp
 ![image](https://github.com/user-attachments/assets/da398e3d-17fa-4e0c-bc2e-14a7feb4749e)
 
 #### 3- Launch EC2
