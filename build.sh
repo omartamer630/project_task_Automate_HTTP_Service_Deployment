@@ -1,65 +1,81 @@
 #!/bin/bash
+
+# Update package lists
 apt update
-echo "install dotnet"
-apt install -y aspnetcore-runtime-6.0
-apt install -y dotnet-sdk-6.0
 
-#install git
-echo "install git"
-apt install git
-apt install unzip
+# Install ASP.NET Core runtime and SDK
+echo "Installing ASP.NET Core runtime and SDK..."
+apt install -y aspnetcore-runtime-6.0 dotnet-sdk-6.0
 
-#install aws cli
+# Install Git and unzip
+echo "Installing Git and unzip..."
+apt install -y git unzip jq
+
+# Install AWS CLI
+echo "Installing AWS CLI..."
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip -qq awscliv2.zip
-./aws/install
+sudo ./aws/install
 aws --version
-aws secretsmanager get-secret-value --secret-id Github_Credentials --query 'SecretString' --output text
-
-
-# Configure Git
 
 # Retrieve GitHub token from AWS Secrets Manager
-GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id Github_Credentials --query 'SecretString' --output text)
+echo "Retrieving GitHub token from AWS Secrets Manager..."
+GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id Github_Credentials --query 'SecretString' --output text | jq -r '.GitHubToken')
 
-# Store the GitHub token in Git credentials using a temporary environment variable
-# Avoid echoing the full URL to prevent token exposure
+# Check if the token retrieval was successful
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "Error: Failed to retrieve GitHub token."
+    exit 1
+fi
+
+# Store the GitHub token in Git credentials
 git_url="https://omartamer630:$GITHUB_TOKEN@github.com"
 echo "$git_url" | sudo -u ubuntu git credential approve
 
-# Configure Git credential helper
+# Configure Git credential helper to cache credentials and use HTTP paths
 sudo -u ubuntu git config --global credential.helper cache
 sudo -u ubuntu git config --global credential.UseHttpPath true
 
+echo "GitHub token successfully configured for Git operations."
 
-#clone repo from code commit
+
+# Clone the repository from GitHub
+echo "Cloning repository..."
 cd /home/ubuntu
-echo "git clone"
 sudo -u ubuntu git clone https://github.com/omartamer630/project_task_Automate_HTTP_Service_Deployment.git
-cd srv-02
 
-#build the dot net service
-echo "dotnet build"
-echo 'DOTNET_CLI_HOME=/temp' >> /etc/environment
+# Change directory to the cloned repo
+cd project_task_Automate_HTTP_Service_Deployment || { echo "Failed to change directory"; exit 1; }
+
+# Build the .NET service
+echo "Building the .NET service..."
+echo 'DOTNET_CLI_HOME=/temp' | sudo tee -a /etc/environment
 export DOTNET_CLI_HOME=/temp
 dotnet publish -c Release --self-contained=false --runtime linux-x64
 
-
+# Create a systemd service file for the .NET application
 cat >/etc/systemd/system/srv-02.service <<EOL
 [Unit]
-Description=Dotnet S3 info service
+Description=Dotnet S3 Info Service
 
 [Service]
-ExecStart=/usr/bin/dotnet /home/ubuntu/srv-02/bin/Release/netcoreapp6/linux-x64/srv02.dll
+ExecStart=/usr/bin/dotnet /home/ubuntu/project_task_Automate_HTTP_Service_Deployment/bin/Release/netcoreapp6/linux-x64/srv02.dll
 SyslogIdentifier=srv-02
-
 Environment=DOTNET_CLI_HOME=/temp
 
 [Install]
 WantedBy=multi-user.target
 EOL
 
+# Reload systemd to recognize the new service
+echo "Reloading systemd..."
 systemctl daemon-reload
 
-#run it
+# Start the .NET service
+echo "Starting the service..."
 systemctl start srv-02
+
+# Enable the service to start on boot
+systemctl enable srv-02
+
+echo "Setup completed successfully."
